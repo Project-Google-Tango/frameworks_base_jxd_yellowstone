@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<edp_policy version="1.0">
+    <!-- This default EDP policy does nothing. Configure device specific EDP policies with an overlay file:
+     $TOP/device/nvidia/<device>/overlay/frameworks/base/core/res/res/xml/edp_device_policy.xml -->
+</edp_policy>

@@ -1,0 +1,222 @@
+diff --cc core/java/android/view/ViewRootImpl.java
+index f9e392e,bc0d7e3..0000000
+--- a/core/java/android/view/ViewRootImpl.java
++++ b/core/java/android/view/ViewRootImpl.java
+@@@ -77,11 -77,10 +77,16 @@@ import com.android.internal.policy.Poli
+  import com.android.internal.view.BaseSurfaceHolder;
+  import com.android.internal.view.RootViewSurfaceTaker;
+  
+++<<<<<<< HEAD
+ +import com.nvidia.NvCPLSvc.NvAppProfiles;
+ +import com.nvidia.NvCPLSvc.NvAppProfileSettingId;
+ +
+++=======
++ import java.io.FileDescriptor;
+++>>>>>>> android-4.4.2_r1
+  import java.io.IOException;
+  import java.io.OutputStream;
++ import java.io.PrintWriter;
+  import java.lang.ref.WeakReference;
+  import java.util.ArrayList;
+  import java.util.HashSet;
+@@@ -3479,24 -3391,9 +3484,15 @@@ public final class ViewRootImpl impleme
+           * Delivers an event to be processed.
+           */
+          public final void deliver(QueuedInputEvent q) {
+ -            if ((q.mFlags & QueuedInputEvent.FLAG_FINISHED) != 0) {
+ +            if (mMapperClient != null && mMapperClient.isEnabled() && mMapperClient.filter(q.mEvent)) {
+ +                // If the event has been successfully handled by mapper, call finishInputEvent
+ +                // to handle remaining works. Also we use the flag FLAG_FINISHED_HANDLED to ask
+ +                // framework not to pass this event to next activity.
+ +                q.mFlags |= QueuedInputEvent.FLAG_FINISHED_HANDLED;
+ +                finishInputEvent(q);
+ +            } else if ((q.mFlags & QueuedInputEvent.FLAG_FINISHED) != 0) {
+                  forward(q);
+-             } else if (mView == null || !mAdded) {
+-                 Slog.w(TAG, "Dropping event due to root view being removed: " + q.mEvent);
+-                 finish(q, false);
+-             } else if (!mAttachInfo.mHasWindowFocus &&
+-                   !q.mEvent.isFromSource(InputDevice.SOURCE_CLASS_POINTER) &&
+-                   !isTerminalInputEvent(q.mEvent)) {
+-                 // If this is a focused event and the window doesn't currently have input focus,
+-                 // then drop this event.  This could be an event that came back from the previous
+-                 // stage but the window has lost focus in the meantime.
+-                 Slog.w(TAG, "Dropping event due to no window focus: " + q.mEvent);
++             } else if (shouldDropInputEvent(q)) {
+                  finish(q, false);
+              } else {
+                  apply(q, onProcess(q));
+diff --cc packages/Keyguard/src/com/android/keyguard/KeyguardHostView.java
+index 3c3edaa,1bae9b8..0000000
+--- a/packages/Keyguard/src/com/android/keyguard/KeyguardHostView.java
++++ b/packages/Keyguard/src/com/android/keyguard/KeyguardHostView.java
+@@@ -295,21 -293,6 +295,24 @@@ public class KeyguardHostView extends K
+                      mTransportState = newState;
+                      if (DEBUGXPORT) Log.v(TAG, "update widget: play state changed");
+                      KeyguardHostView.this.post(mSwitchPageRunnable);
+++<<<<<<< HEAD
+ +                }
+ +            }
+ +        }
+ +        @Override
+ +        public void onSimStateChanged(State simState) {
+ +            if (DEBUG) Log.d(TAG,"onSimStateChanged "+simState);
+ +            if (simState == State.ABSENT) {
+ +                switch (mCurrentSecuritySelection) {
+ +                    case SimPin:
+ +                    case SimPuk:
+ +                        if (DEBUG) Log.d(TAG,"No sim, killing pin screen");
+ +                        showNextSecurityScreenOrFinish(true);
+ +                        break;
+ +                    default:
+ +                        break;
+++=======
+++>>>>>>> android-4.4.2_r1
+                  }
+              }
+          }
+@@@ -1455,7 -1438,7 +1458,11 @@@
+          mAppWidgetToShow = ss.appWidgetToShow;
+          setInsets(ss.insets);
+          if (DEBUG) Log.d(TAG, "onRestoreInstanceState, transport=" + mTransportState);
+++<<<<<<< HEAD
+ +        post(mSwitchPageRunnable);
+++=======
++         mSwitchPageRunnable.run();
+++>>>>>>> android-4.4.2_r1
+      }
+  
+      @Override
+@@@ -1489,10 -1472,21 +1496,28 @@@
+      }
+  
+      private void showAppropriateWidgetPage() {
+++<<<<<<< HEAD
+ +        int state = mTransportState;
+ +        ensureTransportPresentOrRemoved(state);
+ +        int pageToShow = getAppropriateWidgetPage(state);
+ +        mAppWidgetContainer.setCurrentPage(pageToShow);
+++=======
++         final int state = mTransportState;
++         final boolean transportAdded = ensureTransportPresentOrRemoved(state);
++         final int pageToShow = getAppropriateWidgetPage(state);
++         if (!transportAdded) {
++             mAppWidgetContainer.setCurrentPage(pageToShow);
++         } else if (state == TRANSPORT_VISIBLE) {
++             // If the transport was just added, we need to wait for layout to happen before
++             // we can set the current page.
++             post(new Runnable() {
++                 @Override
++                 public void run() {
++                     mAppWidgetContainer.setCurrentPage(pageToShow);
++                 }
++             });
++         }
+++>>>>>>> android-4.4.2_r1
+      }
+  
+      /**
+diff --cc packages/Keyguard/src/com/android/keyguard/KeyguardTransportControlView.java
+index 3c1d1d9,349078f..0000000
+--- a/packages/Keyguard/src/com/android/keyguard/KeyguardTransportControlView.java
++++ b/packages/Keyguard/src/com/android/keyguard/KeyguardTransportControlView.java
+@@@ -65,7 -64,8 +64,12 @@@ public class KeyguardTransportControlVi
+      protected static final boolean DEBUG = false;
+      protected static final String TAG = "TransportControlView";
+  
+++<<<<<<< HEAD
+ +    private static final boolean ANIMATE_TRANSITIONS = false;
+++=======
++     private static final boolean ANIMATE_TRANSITIONS = true;
++     protected static final long QUIESCENT_PLAYBACK_FACTOR = 1000;
+++>>>>>>> android-4.4.2_r1
+  
+      private ViewGroup mMetadataContainer;
+      private ViewGroup mInfoContainer;
+diff --cc policy/src/com/android/internal/policy/impl/PhoneWindow.java
+index 1745bc7,44fc1f8..0000000
+--- a/policy/src/com/android/internal/policy/impl/PhoneWindow.java
++++ b/policy/src/com/android/internal/policy/impl/PhoneWindow.java
+@@@ -1922,7 -1922,9 +1922,13 @@@ public class PhoneWindow extends Windo
+          private PopupWindow mActionModePopup;
+          private Runnable mShowActionModePopup;
+  
+++<<<<<<< HEAD
+ +        // View added at runtime to IME windows to cover the navigation bar
+++=======
++         // View added at runtime to draw under the status bar area
++         private View mStatusGuard;
++         // View added at runtime to draw under the navigation bar area
+++>>>>>>> android-4.4.2_r1
+          private View mNavigationGuard;
+  
+          public DecorView(Context context, int featureId) {
+@@@ -2484,33 -2486,8 +2490,38 @@@
+          @Override
+          protected boolean fitSystemWindows(Rect insets) {
+              mFrameOffsets.set(insets);
+++<<<<<<< HEAD
+ +
+ +            // IMEs lay out below the nav bar, but the content view must not (for back compat)
+ +            if (getAttributes().type == WindowManager.LayoutParams.TYPE_INPUT_METHOD) {
+ +                // prevent the content view from including the nav bar height
+ +                if (mContentParent != null) {
+ +                    if (mContentParent.getLayoutParams() instanceof MarginLayoutParams) {
+ +                        MarginLayoutParams mlp =
+ +                                (MarginLayoutParams) mContentParent.getLayoutParams();
+ +                        mlp.bottomMargin = insets.bottom;
+ +                        mContentParent.setLayoutParams(mlp);
+ +                    }
+ +                }
+ +                // position the navigation guard view, creating it if necessary
+ +                if (mNavigationGuard == null) {
+ +                    mNavigationGuard = new View(mContext);
+ +                    mNavigationGuard.setBackgroundColor(mContext.getResources()
+ +                            .getColor(R.color.input_method_navigation_guard));
+ +                    addView(mNavigationGuard, new LayoutParams(
+ +                            LayoutParams.MATCH_PARENT, insets.bottom,
+ +                            Gravity.START | Gravity.BOTTOM));
+ +                } else {
+ +                    LayoutParams lp = (LayoutParams) mNavigationGuard.getLayoutParams();
+ +                    lp.height = insets.bottom;
+ +                    mNavigationGuard.setLayoutParams(lp);
+ +                }
+ +            }
+ +
+++=======
++             updateStatusGuard(insets);
++             updateNavigationGuard(insets);
+++>>>>>>> android-4.4.2_r1
+              if (getForeground() != null) {
+                  drawableChanged();
+              }
+diff --cc tools/layoutlib/bridge/src/com/android/layoutlib/bridge/impl/RenderAction.java
+index 23d08e3,60f5331..0000000
+--- a/tools/layoutlib/bridge/src/com/android/layoutlib/bridge/impl/RenderAction.java
++++ b/tools/layoutlib/bridge/src/com/android/layoutlib/bridge/impl/RenderAction.java
+@@@ -273,7 -273,6 +273,10 @@@ public abstract class RenderAction<T ex
+              mContext.getRenderResources().setLogger(null);
+          }
+  
+++<<<<<<< HEAD
+ +        mContext = null;
+++=======
+++>>>>>>> android-4.4.2_r1
+      }
+  
+      public static BridgeContext getCurrentContext() {
+diff --cc tools/layoutlib/create/src/com/android/tools/layoutlib/create/Main.java
+index ba23048,ee501d2..0000000
+--- a/tools/layoutlib/create/src/com/android/tools/layoutlib/create/Main.java
++++ b/tools/layoutlib/create/src/com/android/tools/layoutlib/create/Main.java
+@@@ -113,6 -113,7 +113,10 @@@ public class Main 
+                          "android.pim.*", // for datepicker
+                          "android.os.*",  // for android.os.Handler
+                          "android.database.ContentObserver", // for Digital clock
+++<<<<<<< HEAD
+++=======
++                         "com.android.i18n.phonenumbers.*",  // for TextView with autolink attribute
+++>>>>>>> android-4.4.2_r1
+                      },
+                      excludeClasses);
+              aa.analyze();
